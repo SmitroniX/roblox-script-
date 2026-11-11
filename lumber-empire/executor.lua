@@ -1,6 +1,7 @@
 -- ============================================================
---  SmitroniX Hub — Lumber Empire Automation Suite
---  Original, high-performance, non-glitchy execution
+--  SmitroniX Hub v2 — Lumber Empire Automation Suite
+--  Features: Tycoon Automation, Zero-Fling Chop, Live HUD,
+--            Waypoints, Fly, FPS Booster, Themes & Configs
 -- ============================================================
 
 -- ── Services & Environment ───────────────────────────────────
@@ -11,10 +12,11 @@ local UserInputService  = game:GetService("UserInputService")
 local VirtualUser       = game:GetService("VirtualUser")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui           = game:GetService("CoreGui")
+local Lighting          = game:GetService("Lighting")
 
 local LP = Players.LocalPlayer
 
--- Safe GUI container (Delta, Fluxus, Codex, KRNL, Synapse, Arceus)
+-- Safe GUI container
 local GuiParent = nil
 local okHui, hui = pcall(function()
     if typeof(gethui) == "function" then return gethui() end
@@ -49,22 +51,73 @@ local function getHum()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
 
+-- ── Theme Definitions ────────────────────────────────────────
+local Themes = {
+    Violet = {
+        Accent      = Color3.fromRGB(139, 92, 246),
+        AccentLight = Color3.fromRGB(167, 139, 250),
+        AccentDark  = Color3.fromRGB(109, 40, 217),
+    },
+    Cyan = {
+        Accent      = Color3.fromRGB(6, 182, 212),
+        AccentLight = Color3.fromRGB(103, 232, 249),
+        AccentDark  = Color3.fromRGB(14, 116, 144),
+    },
+    Emerald = {
+        Accent      = Color3.fromRGB(16, 185, 129),
+        AccentLight = Color3.fromRGB(110, 231, 183),
+        AccentDark  = Color3.fromRGB(4, 120, 87),
+    },
+    Gold = {
+        Accent      = Color3.fromRGB(245, 158, 11),
+        AccentLight = Color3.fromRGB(252, 211, 77),
+        AccentDark  = Color3.fromRGB(180, 83, 9),
+    },
+    Crimson = {
+        Accent      = Color3.fromRGB(239, 68, 68),
+        AccentLight = Color3.fromRGB(252, 165, 165),
+        AccentDark  = Color3.fromRGB(185, 28, 28),
+    },
+}
+
+local CurrentThemeName = "Violet"
+local Theme = {
+    BG            = Color3.fromRGB(13, 11, 20),
+    Sidebar       = Color3.fromRGB(18, 15, 28),
+    Card          = Color3.fromRGB(24, 21, 38),
+    CardHover     = Color3.fromRGB(30, 26, 46),
+    CardStroke    = Color3.fromRGB(42, 36, 64),
+    Separator     = Color3.fromRGB(32, 28, 50),
+    Accent        = Themes.Violet.Accent,
+    AccentLight   = Themes.Violet.AccentLight,
+    AccentDark    = Themes.Violet.AccentDark,
+    ToggleOff     = Color3.fromRGB(38, 34, 56),
+    ToggleOn      = Themes.Violet.Accent,
+    TextPrimary   = Color3.fromRGB(248, 247, 255),
+    TextSecondary = Color3.fromRGB(150, 144, 172),
+    TextMuted     = Color3.fromRGB(100, 94, 125),
+    ScrollThumb   = Themes.Violet.Accent,
+    Green         = Color3.fromRGB(16, 185, 129),
+    Red           = Color3.fromRGB(239, 68, 68),
+}
+
 -- ── State Management ─────────────────────────────────────────
 local State = {
-    -- Safety & Movement (FIXES PLAYER FLINGING)
-    AllowTeleport      = false,          -- DEFAULT OFF: Never fling or move player without consent!
-    SafeRadius         = 45,             -- Maximum search distance (stays strictly on your local area)
+    -- Safety & Movement
+    AllowTeleport      = false,
+    SafeRadius         = 45,
+    GoldenPriority     = true,
     
     -- Tycoon Automation
     AutoChop           = false,
     AutoUpgrade        = false,
     AutoHireWorkers    = false,
     AutoRebirth        = false,
+    SmartRebirthGoal   = 100000,
     
     -- Airport Automation
     AutoAirportHangar  = false,
     AutoAirportFlight  = false,
-    AutoAirportUpgrade = false,
     
     -- Player Enhancements
     WalkSpeedBoost     = false,
@@ -72,37 +125,24 @@ local State = {
     JumpPowerBoost     = false,
     JumpPowerVal       = 50,
     Noclip             = false,
+    InfiniteJump       = false,
+    Fly                = false,
+    FlySpeed           = 40,
     InstantPrompts     = false,
     AntiAFK            = true,
     
-    -- Visuals
+    -- Optimizations & Visuals
+    FPSBooster         = false,
     TreeESP            = false,
     Fullbright         = false,
+    ShowHUD            = true,
     
-    -- Status
+    -- Telemetry & Session
+    StartTime          = os.time(),
+    InitialCoins       = 0,
+    CoinsEarned        = 0,
     ChopCount          = 0,
-    CurrentStatus      = "Idle",
-}
-
--- ── Theme Palette (SmitroniX Signature Dark Theme) ───────────
-local Theme = {
-    BG            = Color3.fromRGB(13, 11, 20),       -- Deep obsidian
-    Sidebar       = Color3.fromRGB(18, 15, 28),       -- Dark sidebar
-    Card          = Color3.fromRGB(24, 21, 38),       -- Elevated panel
-    CardHover     = Color3.fromRGB(30, 26, 46),
-    CardStroke    = Color3.fromRGB(42, 36, 64),       -- Subtle crisp border
-    Separator     = Color3.fromRGB(32, 28, 50),
-    Accent        = Color3.fromRGB(139, 92, 246),     -- Electric Violet
-    AccentLight   = Color3.fromRGB(167, 139, 250),
-    AccentDark    = Color3.fromRGB(109, 40, 217),
-    ToggleOff     = Color3.fromRGB(38, 34, 56),
-    ToggleOn      = Color3.fromRGB(139, 92, 246),
-    TextPrimary   = Color3.fromRGB(248, 247, 255),
-    TextSecondary = Color3.fromRGB(150, 144, 172),
-    TextMuted     = Color3.fromRGB(100, 94, 125),
-    ScrollThumb   = Color3.fromRGB(139, 92, 246),
-    Green         = Color3.fromRGB(16, 185, 129),     -- Emerald
-    Red           = Color3.fromRGB(239, 68, 68),
+    RebirthCount       = 0,
 }
 
 -- ── UI Helpers ───────────────────────────────────────────────
@@ -138,7 +178,7 @@ local function tween(inst, props, duration)
 end
 
 -- ══════════════════════════════════════════════════════════════
--- ── SCREEN GUI & MAIN WINDOW ──────────────────────────────────
+-- ── ROOT SCREEN GUI & MAIN WINDOW ─────────────────────────────
 -- ══════════════════════════════════════════════════════════════
 local ScreenGui = create("ScreenGui", {
     Name = "SmitroniXHub",
@@ -158,9 +198,8 @@ local MainWindow = create("Frame", {
     Parent = ScreenGui,
 })
 addCorner(MainWindow, 12)
-addStroke(MainWindow, Theme.CardStroke, 1.2)
+local MainStroke = addStroke(MainWindow, Theme.CardStroke, 1.2)
 
--- Viewport adaptive clamping for mobile screens
 pcall(function()
     local cam = workspace.CurrentCamera
     if cam and cam.ViewportSize.X < 760 then
@@ -170,7 +209,7 @@ pcall(function()
     end
 end)
 
--- ── Smooth Drag Controller ────────────────────────────────────
+-- Dragging Controller
 local dragging, dragStart, startPos = false, nil, nil
 local function updateDrag(input)
     local delta = input.Position - dragStart
@@ -181,7 +220,7 @@ local function updateDrag(input)
 end
 
 -- ══════════════════════════════════════════════════════════════
--- ── SIDEBAR (ORIGINAL SMITRONIX BRANDING) ─────────────────────
+-- ── SIDEBAR (SMITRONIX BRANDING) ──────────────────────────────
 -- ══════════════════════════════════════════════════════════════
 local Sidebar = create("Frame", {
     Name = "Sidebar",
@@ -192,7 +231,7 @@ local Sidebar = create("Frame", {
 })
 addCorner(Sidebar, 12)
 
-local Straightener = create("Frame", {
+create("Frame", {
     Size = UDim2.new(0, 12, 1, 0),
     Position = UDim2.new(1, -12, 0, 0),
     BackgroundColor3 = Theme.Sidebar,
@@ -200,7 +239,7 @@ local Straightener = create("Frame", {
     Parent = Sidebar,
 })
 
-local VerticalSep = create("Frame", {
+create("Frame", {
     Size = UDim2.new(0, 1, 1, 0),
     Position = UDim2.new(1, 0, 0, 0),
     BackgroundColor3 = Theme.Separator,
@@ -208,7 +247,6 @@ local VerticalSep = create("Frame", {
     Parent = Sidebar,
 })
 
--- Sidebar Dragging
 Sidebar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
@@ -225,14 +263,12 @@ Sidebar.InputChanged:Connect(function(input)
     end
 end)
 
--- ── Brand Header (SmitroniX) ──────────────────────────────────
 local BrandFrame = create("Frame", {
     Size = UDim2.new(1, 0, 0, 60),
     BackgroundTransparency = 1,
     Parent = Sidebar,
 })
 
--- Custom Geometric Hex/Diamond Logo
 local LogoBadge = create("Frame", {
     Size = UDim2.fromOffset(28, 28),
     Position = UDim2.fromOffset(16, 16),
@@ -241,9 +277,9 @@ local LogoBadge = create("Frame", {
     Parent = BrandFrame,
 })
 addCorner(LogoBadge, 8)
-addStroke(LogoBadge, Theme.Accent, 1)
+local LogoStroke = addStroke(LogoBadge, Theme.Accent, 1)
 
-local LogoLetter = create("TextLabel", {
+create("TextLabel", {
     Size = UDim2.new(1, 0, 1, 0),
     BackgroundTransparency = 1,
     Font = Enum.Font.GothamBold,
@@ -253,7 +289,7 @@ local LogoLetter = create("TextLabel", {
     Parent = LogoBadge,
 })
 
-local BrandTitle = create("TextLabel", {
+create("TextLabel", {
     Size = UDim2.new(1, -56, 0, 20),
     Position = UDim2.fromOffset(52, 14),
     BackgroundTransparency = 1,
@@ -270,15 +306,14 @@ local BrandBadge = create("TextLabel", {
     Position = UDim2.fromOffset(52, 33),
     BackgroundTransparency = 1,
     Font = Enum.Font.GothamMedium,
-    Text = "LUMBER EMPIRE",
+    Text = "LUMBER EMPIRE v2",
     TextColor3 = Theme.AccentLight,
-    TextSize = 9,
+    TextSize = 8,
     TextXAlignment = Enum.TextXAlignment.Left,
     Parent = BrandFrame,
 })
 
--- Category Header
-local SectionLabel = create("TextLabel", {
+create("TextLabel", {
     Size = UDim2.new(1, -32, 0, 18),
     Position = UDim2.fromOffset(16, 64),
     BackgroundTransparency = 1,
@@ -290,16 +325,15 @@ local SectionLabel = create("TextLabel", {
     Parent = Sidebar,
 })
 
--- Navigation List
 local NavList = create("Frame", {
-    Size = UDim2.new(1, -20, 1, -135),
-    Position = UDim2.fromOffset(10, 88),
+    Size = UDim2.new(1, -20, 1, -95),
+    Position = UDim2.fromOffset(10, 86),
     BackgroundTransparency = 1,
     Parent = Sidebar,
 })
 create("UIListLayout", {
     SortOrder = Enum.SortOrder.LayoutOrder,
-    Padding = UDim.new(0, 4),
+    Padding = UDim.new(0, 3),
     Parent = NavList,
 })
 
@@ -314,16 +348,15 @@ local ContentArea = create("Frame", {
     Parent = MainWindow,
 })
 
--- Header
 local HeaderFrame = create("Frame", {
-    Size = UDim2.new(1, 0, 0, 58),
+    Size = UDim2.new(1, 0, 0, 56),
     BackgroundTransparency = 1,
     Parent = ContentArea,
 })
 
 local HeaderTitle = create("TextLabel", {
     Size = UDim2.new(1, -60, 0, 24),
-    Position = UDim2.fromOffset(24, 12),
+    Position = UDim2.fromOffset(24, 10),
     BackgroundTransparency = 1,
     Font = Enum.Font.GothamBold,
     Text = "Tycoon",
@@ -335,7 +368,7 @@ local HeaderTitle = create("TextLabel", {
 
 local HeaderSubtitle = create("TextLabel", {
     Size = UDim2.new(1, -60, 0, 16),
-    Position = UDim2.fromOffset(24, 34),
+    Position = UDim2.fromOffset(24, 32),
     BackgroundTransparency = 1,
     Font = Enum.Font.Gotham,
     Text = "Automation & Upgrades",
@@ -361,7 +394,7 @@ CloseBtn.MouseButton1Click:Connect(function()
     MainWindow.Visible = false
 end)
 
-local HeaderSep = create("Frame", {
+create("Frame", {
     Size = UDim2.new(1, 0, 0, 1),
     Position = UDim2.new(0, 0, 1, -1),
     BackgroundColor3 = Theme.Separator,
@@ -369,15 +402,14 @@ local HeaderSep = create("Frame", {
     Parent = HeaderFrame,
 })
 
--- Page Container
 local PageContainer = create("Frame", {
-    Size = UDim2.new(1, 0, 1, -58),
-    Position = UDim2.fromOffset(0, 58),
+    Size = UDim2.new(1, 0, 1, -56),
+    Position = UDim2.fromOffset(0, 56),
     BackgroundTransparency = 1,
     Parent = ContentArea,
 })
 
--- Page Factory
+-- Navigation & Pages
 local NavButtons = {}
 local Pages = {}
 
@@ -434,7 +466,7 @@ end
 local function addNavItem(name, iconChar, subtitle)
     local btn = create("TextButton", {
         Name = "Nav_" .. name,
-        Size = UDim2.new(1, 0, 0, 36),
+        Size = UDim2.new(1, 0, 0, 34),
         BackgroundColor3 = Theme.Sidebar,
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
@@ -446,7 +478,7 @@ local function addNavItem(name, iconChar, subtitle)
     local icon = create("TextLabel", {
         Name = "Icon",
         Size = UDim2.fromOffset(24, 24),
-        Position = UDim2.fromOffset(10, 6),
+        Position = UDim2.fromOffset(10, 5),
         BackgroundTransparency = 1,
         Font = Enum.Font.GothamBold,
         Text = iconChar,
@@ -458,12 +490,12 @@ local function addNavItem(name, iconChar, subtitle)
     local text = create("TextLabel", {
         Name = "Text",
         Size = UDim2.new(1, -44, 1, 0),
-        Position = UDim2.fromOffset(40, 0),
+        Position = UDim2.fromOffset(38, 0),
         BackgroundTransparency = 1,
         Font = Enum.Font.GothamMedium,
         Text = name,
         TextColor3 = Theme.TextSecondary,
-        TextSize = 13,
+        TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = btn,
     })
@@ -479,10 +511,9 @@ end
 -- ══════════════════════════════════════════════════════════════
 -- ── WIDGET FACTORY ────────────────────────────────────────────
 -- ══════════════════════════════════════════════════════════════
-
 local function createCard(parent, height)
     local card = create("Frame", {
-        Size = UDim2.new(1, 0, 0, height or 54),
+        Size = UDim2.new(1, 0, 0, height or 52),
         BackgroundColor3 = Theme.Card,
         BorderSizePixel = 0,
         Parent = parent,
@@ -495,7 +526,7 @@ end
 local function addToggleCard(parent, title, subtitle, defaultVal, callback)
     local card = createCard(parent, 52)
     
-    local titleLbl = create("TextLabel", {
+    create("TextLabel", {
         Size = UDim2.new(1, -70, 0, 18),
         Position = UDim2.fromOffset(14, 8),
         BackgroundTransparency = 1,
@@ -507,7 +538,7 @@ local function addToggleCard(parent, title, subtitle, defaultVal, callback)
         Parent = card,
     })
     
-    local subLbl = create("TextLabel", {
+    create("TextLabel", {
         Size = UDim2.new(1, -70, 0, 16),
         Position = UDim2.fromOffset(14, 26),
         BackgroundTransparency = 1,
@@ -583,8 +614,8 @@ local function addButtonCard(parent, title, subtitle, btnText, btnColor, callbac
     })
     
     local actBtn = create("TextButton", {
-        Size = UDim2.fromOffset(110, 30),
-        Position = UDim2.new(1, -124, 0.5, -15),
+        Size = UDim2.fromOffset(115, 30),
+        Position = UDim2.new(1, -128, 0.5, -15),
         BackgroundColor3 = btnColor or Theme.Accent,
         Font = Enum.Font.GothamBold,
         Text = btnText,
@@ -690,18 +721,113 @@ local function addSliderCard(parent, title, subtitle, minVal, maxVal, defaultVal
 end
 
 -- ══════════════════════════════════════════════════════════════
+-- ── FLOATING LIVE DASHBOARD (HUD) ─────────────────────────────
+-- ══════════════════════════════════════════════════════════════
+local HUD = create("Frame", {
+    Name = "SX_LiveHUD",
+    Size = UDim2.fromOffset(230, 90),
+    Position = UDim2.fromOffset(20, 70),
+    BackgroundColor3 = Theme.BG,
+    BorderSizePixel = 0,
+    Visible = State.ShowHUD,
+    Parent = ScreenGui,
+})
+addCorner(HUD, 10)
+addStroke(HUD, Theme.CardStroke, 1.2)
+
+local hudHeader = create("Frame", {
+    Size = UDim2.new(1, 0, 0, 24),
+    BackgroundColor3 = Theme.Sidebar,
+    BorderSizePixel = 0,
+    Parent = HUD,
+})
+addCorner(hudHeader, 10)
+
+create("TextLabel", {
+    Size = UDim2.new(1, -20, 1, 0),
+    Position = UDim2.fromOffset(10, 0),
+    BackgroundTransparency = 1,
+    Font = Enum.Font.GothamBold,
+    Text = "📊 SmitroniX Live Stats",
+    TextColor3 = Theme.TextPrimary,
+    TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    Parent = hudHeader,
+})
+
+local hudTime = create("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 18),
+    Position = UDim2.fromOffset(10, 26),
+    BackgroundTransparency = 1,
+    Font = Enum.Font.GothamMedium,
+    Text = "⏱ Session: 00:00:00",
+    TextColor3 = Theme.TextSecondary,
+    TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    Parent = HUD,
+})
+
+local hudCoins = create("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 18),
+    Position = UDim2.fromOffset(10, 44),
+    BackgroundTransparency = 1,
+    Font = Enum.Font.GothamMedium,
+    Text = "💰 Earned: $0  (+0/hr)",
+    TextColor3 = Theme.Green,
+    TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    Parent = HUD,
+})
+
+local hudLogs = create("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 18),
+    Position = UDim2.fromOffset(10, 64),
+    BackgroundTransparency = 1,
+    Font = Enum.Font.GothamMedium,
+    Text = "🪵 Chopped: 0  |  🔁 Rebirths: 0",
+    TextColor3 = Theme.AccentLight,
+    TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    Parent = HUD,
+})
+
+-- Draggable HUD
+do
+    local hDrag, hStart, hPos = false, nil, nil
+    hudHeader.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            hDrag = true
+            hStart = i.Position
+            hPos = HUD.Position
+            i.Changed:Connect(function()
+                if i.UserInputState == Enum.UserInputState.End then hDrag = false end
+            end)
+        end
+    end)
+    hudHeader.InputChanged:Connect(function(i)
+        if hDrag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+            local d = i.Position - hStart
+            HUD.Position = UDim2.new(hPos.X.Scale, hPos.X.Offset + d.X, hPos.Y.Scale, hPos.Y.Offset + d.Y)
+        end
+    end)
+end
+
+-- ══════════════════════════════════════════════════════════════
 -- ── BUILD PAGES ───────────────────────────────────────────────
 -- ══════════════════════════════════════════════════════════════
-
-local PageTycoon  = createPage("Tycoon")
-local PageChop    = createPage("Auto Chop")
-local PagePlayer  = createPage("Player")
-local PageVisuals = createPage("Visuals")
+local PageTycoon     = createPage("Tycoon")
+local PageChop       = createPage("Auto Chop")
+local PageWaypoints  = createPage("Waypoints")
+local PagePlayer     = createPage("Player")
+local PageOptim      = createPage("Optimizations")
+local PageSettings   = createPage("Settings")
 
 addNavItem("Tycoon", "🌲", "Lumber Empire Automated Upgrades")
 addNavItem("Auto Chop", "🪓", "Safe Wood Harvesting (No-Fling)")
-addNavItem("Player", "👤", "Character & Movement Tweaks")
-addNavItem("Visuals", "🎯", "World ESP & Highlights")
+addNavItem("Waypoints", "📍", "1-Click Base Navigation")
+addNavItem("Player", "👤", "Character & Flight Enhancements")
+addNavItem("Optimizations", "⚡", "FPS Booster & World ESP")
+addNavItem("Settings", "🎨", "Theme Colors & HUD Controls")
 
 -- ── 1. TYCOON PAGE ────────────────────────────────────────────
 addToggleCard(PageTycoon, "Auto Upgrade Workers & Trucks", "Automatically upgrades truck speed, capacity and workers", State.AutoUpgrade, function(on)
@@ -712,11 +838,15 @@ addToggleCard(PageTycoon, "Auto Hire Workers", "Hires sawmill workers automatica
     State.AutoHireWorkers = on
 end)
 
-addToggleCard(PageTycoon, "Auto Rebirth", "Executes rebirth automatically when requirements are met", State.AutoRebirth, function(on)
+addToggleCard(PageTycoon, "Smart Auto Rebirth", "Only triggers rebirth after reaching your target coins goal", State.AutoRebirth, function(on)
     State.AutoRebirth = on
 end)
 
-addButtonCard(PageTycoon, "Instant Rebirth", "Triggers Rebirth remote once", "Rebirth Now", Theme.Red, function()
+addSliderCard(PageTycoon, "Rebirth Coin Goal", "Min coins needed before smart rebirth triggers", 50000, 1000000, State.SmartRebirthGoal, "$", function(val)
+    State.SmartRebirthGoal = val
+end)
+
+addButtonCard(PageTycoon, "Instant Rebirth Now", "Triggers Rebirth remote immediately", "Rebirth Now", Theme.Red, function()
     pcall(function()
         ReplicatedStorage.Remotes.Rebirth:FireServer()
     end)
@@ -730,46 +860,83 @@ addToggleCard(PageTycoon, "Auto Send Flights", "Sends planes out continuously fo
     State.AutoAirportFlight = on
 end)
 
--- ── 2. AUTO CHOP PAGE (FIXED: ZERO FLINGING) ──────────────────
-local SafetyCard = createCard(PageChop, 56)
-create("TextLabel", {
-    Size = UDim2.new(1, -20, 0, 20),
-    Position = UDim2.fromOffset(12, 8),
-    BackgroundTransparency = 1,
-    Font = Enum.Font.GothamBold,
-    Text = "🛡 Anti-Fling Safety Guard Active",
-    TextColor3 = Theme.Green,
-    TextSize = 13,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    Parent = SafetyCard,
-})
-create("TextLabel", {
-    Size = UDim2.new(1, -20, 0, 16),
-    Position = UDim2.fromOffset(12, 28),
-    BackgroundTransparency = 1,
-    Font = Enum.Font.Gotham,
-    Text = "Player movement is locked to your local plot to prevent flying or flinging.",
-    TextColor3 = Theme.TextSecondary,
-    TextSize = 11,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    Parent = SafetyCard,
-})
-
+-- ── 2. AUTO CHOP PAGE (ZERO-FLING SAFETY) ─────────────────────
 addToggleCard(PageChop, "Auto Chop Local Trees", "Automatically chops trees on your plot with zero flinging", State.AutoChop, function(on)
     State.AutoChop = on
-    if on then State.CurrentStatus = "Harvesting local trees" else State.CurrentStatus = "Idle" end
+end)
+
+addToggleCard(PageChop, "Golden & Event Tree Priority", "Targets rare and high-multiplier trees first", State.GoldenPriority, function(on)
+    State.GoldenPriority = on
 end)
 
 addToggleCard(PageChop, "Allow Player Teleport", "OFF = Stands still (safe) | ON = Steps to nearby trees", State.AllowTeleport, function(on)
     State.AllowTeleport = on
 end)
 
-addSliderCard(PageChop, "Tree Search Distance", "Maximum radius around you to target trees", 20, 80, State.SafeRadius, "studs", function(val)
+addSliderCard(PageChop, "Tree Search Radius", "Maximum distance around you to target trees", 20, 80, State.SafeRadius, "studs", function(val)
     State.SafeRadius = val
 end)
 
--- ── 3. PLAYER PAGE ────────────────────────────────────────────
-addToggleCard(PagePlayer, "Walk Speed Boost", "Sets your character's movement speed", State.WalkSpeedBoost, function(on)
+-- ── 3. WAYPOINTS PAGE (SAFE 1-CLICK TELEPORT) ──────────────────
+local savedPlotPos = nil
+addButtonCard(PageWaypoints, "Save My Plot Location", "Saves your current position as your base waypoint", "Set Plot", Theme.Accent, function()
+    local root = getRoot()
+    if root then
+        savedPlotPos = root.Position
+    end
+end)
+
+addButtonCard(PageWaypoints, "Teleport to My Plot", "Safely returns to your saved base position", "Teleport", Theme.Green, function()
+    local root = getRoot()
+    if root and savedPlotPos then
+        pcall(function()
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+            root.CFrame = CFrame.new(savedPlotPos + Vector3.new(0, 2, 0))
+        end)
+    end
+end)
+
+addButtonCard(PageWaypoints, "Teleport to Wood Sell Pad", "Finds the nearest wood unloading / sell pad", "Go to Sell", Theme.AccentDark, function()
+    local root = getRoot()
+    if root then
+        for _, s in ipairs(workspace:GetDescendants()) do
+            if s.Name:lower():find("sell") or s.Name:lower():find("unload") then
+                local part = s:IsA("BasePart") and s or s:FindFirstChildOfClass("BasePart")
+                if part then
+                    pcall(function()
+                        root.AssemblyLinearVelocity = Vector3.zero
+                        root.AssemblyAngularVelocity = Vector3.zero
+                        root.CFrame = CFrame.new(part.Position + Vector3.new(0, 3, 0))
+                    end)
+                    break
+                end
+            end
+        end
+    end
+end)
+
+addButtonCard(PageWaypoints, "Teleport to Airport", "Navigates to the airport terminal expansion", "Airport", Theme.Accent, function()
+    local root = getRoot()
+    if root then
+        for _, s in ipairs(workspace:GetDescendants()) do
+            if s.Name:lower():find("airport") or s.Name:lower():find("hangar") then
+                local part = s:IsA("BasePart") and s or s:FindFirstChildOfClass("BasePart")
+                if part then
+                    pcall(function()
+                        root.AssemblyLinearVelocity = Vector3.zero
+                        root.AssemblyAngularVelocity = Vector3.zero
+                        root.CFrame = CFrame.new(part.Position + Vector3.new(0, 3, 0))
+                    end)
+                    break
+                end
+            end
+        end
+    end
+end)
+
+-- ── 4. PLAYER PAGE ────────────────────────────────────────────
+addToggleCard(PagePlayer, "Walk Speed Boost", "Sets your character movement speed", State.WalkSpeedBoost, function(on)
     State.WalkSpeedBoost = on
     local hum = getHum()
     if hum then hum.WalkSpeed = on and State.WalkSpeedVal or 16 end
@@ -781,6 +948,32 @@ addSliderCard(PagePlayer, "Walk Speed Amount", "Default speed is 16", 16, 120, S
         local hum = getHum()
         if hum then hum.WalkSpeed = val end
     end
+end)
+
+addToggleCard(PagePlayer, "Flight / Float Mode", "Fly freely without triggering void barriers", State.Fly, function(on)
+    State.Fly = on
+    local root = getRoot()
+    if root then
+        local existing = root:FindFirstChild("SX_FlyBV")
+        if on and not existing then
+            local bv = create("BodyVelocity", {
+                Name = "SX_FlyBV",
+                Velocity = Vector3.zero,
+                MaxForce = Vector3.new(9e9, 9e9, 9e9),
+                Parent = root,
+            })
+        elseif not on and existing then
+            existing:Destroy()
+        end
+    end
+end)
+
+addSliderCard(PagePlayer, "Flight Speed", "Adjust your aerial movement velocity", 20, 150, State.FlySpeed, "studs/s", function(val)
+    State.FlySpeed = val
+end)
+
+addToggleCard(PagePlayer, "Infinite Jump", "Jump continuously in mid-air", State.InfiniteJump, function(on)
+    State.InfiniteJump = on
 end)
 
 addToggleCard(PagePlayer, "Noclip", "Walk through objects and barriers safely", State.Noclip, function(on)
@@ -798,14 +991,26 @@ addToggleCard(PagePlayer, "Anti-AFK", "Prevents Roblox 20-minute idle disconnect
     State.AntiAFK = on
 end)
 
--- ── 4. VISUALS PAGE ───────────────────────────────────────────
-addToggleCard(PageVisuals, "Tree ESP Chams", "Draws highlights over all living harvestable trees", State.TreeESP, function(on)
+-- ── 5. OPTIMIZATIONS & VISUALS ────────────────────────────────
+addToggleCard(PageOptim, "FPS Booster (Potato Mode)", "Lowers heavy particle textures for 60 FPS on mobile", State.FPSBooster, function(on)
+    State.FPSBooster = on
+    pcall(function()
+        Lighting.GlobalShadows = not on
+        for _, p in ipairs(workspace:GetDescendants()) do
+            if p:IsA("ParticleEmitter") or p:IsA("Trail") then
+                p.Enabled = not on
+            end
+        end
+    end)
+end)
+
+addToggleCard(PageOptim, "Tree ESP Chams", "Draws highlights over all living harvestable trees", State.TreeESP, function(on)
     State.TreeESP = on
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA("Model") and obj.Name:lower():find("tree") then
             local highlight = obj:FindFirstChild("SX_ESP")
             if on and not highlight then
-                local h = create("Highlight", {
+                create("Highlight", {
                     Name = "SX_ESP",
                     FillColor = Theme.Accent,
                     OutlineColor = Theme.AccentLight,
@@ -819,30 +1024,106 @@ addToggleCard(PageVisuals, "Tree ESP Chams", "Draws highlights over all living h
     end
 end)
 
-addToggleCard(PageVisuals, "Fullbright", "Removes shadows and brightens environment", State.Fullbright, function(on)
+addToggleCard(PageOptim, "Fullbright", "Removes darkness and brightens entire map", State.Fullbright, function(on)
     State.Fullbright = on
-    local lighting = game:GetService("Lighting")
     if on then
-        lighting.Brightness = 2
-        lighting.ClockTime = 14
-        lighting.GlobalShadows = false
+        Lighting.Brightness = 2
+        Lighting.ClockTime = 14
+        Lighting.GlobalShadows = false
     else
-        lighting.Brightness = 1
-        lighting.GlobalShadows = true
+        Lighting.Brightness = 1
+        Lighting.GlobalShadows = true
     end
+end)
+
+-- ── 6. SETTINGS & THEMES ──────────────────────────────────────
+addToggleCard(PageSettings, "Show Live Dashboard (HUD)", "Displays real-time coins, time & logs overlay", State.ShowHUD, function(on)
+    State.ShowHUD = on
+    HUD.Visible = on
+end)
+
+local function applyTheme(name)
+    local t = Themes[name]
+    if not t then return end
+    CurrentThemeName = name
+    Theme.Accent = t.Accent
+    Theme.AccentLight = t.AccentLight
+    Theme.AccentDark = t.AccentDark
+    Theme.ToggleOn = t.Accent
+    Theme.ScrollThumb = t.Accent
+    
+    LogoBadge.BackgroundColor3 = t.AccentDark
+    LogoStroke.Color = t.Accent
+    BrandBadge.TextColor3 = t.AccentLight
+    MainStroke.Color = Theme.CardStroke
+end
+
+addButtonCard(PageSettings, "Theme: Electric Violet", "Sets theme to deep violet / purple", "Violet", Themes.Violet.Accent, function()
+    applyTheme("Violet")
+end)
+
+addButtonCard(PageSettings, "Theme: Cyber Cyan", "Sets theme to neon turquoise / cyan", "Cyan", Themes.Cyan.Accent, function()
+    applyTheme("Cyan")
+end)
+
+addButtonCard(PageSettings, "Theme: Emerald Green", "Sets theme to vibrant forest emerald", "Emerald", Themes.Emerald.Accent, function()
+    applyTheme("Emerald")
+end)
+
+addButtonCard(PageSettings, "Theme: Sunset Gold", "Sets theme to warm amber / gold", "Gold", Themes.Gold.Accent, function()
+    applyTheme("Gold")
 end)
 
 -- Initial view
 switchPage("Tycoon", "Lumber Empire Automated Upgrades")
 
 -- ══════════════════════════════════════════════════════════════
--- ── SAFE EXECUTION LOOPS (NO FLINGING, ZERO VOID TELEPORT) ───
+-- ── BACKGROUND LOOPS & GAME HOOKS ─────────────────────────────
 -- ══════════════════════════════════════════════════════════════
+
+-- Initial Coin Recording
+pcall(function()
+    local ls = LP:FindFirstChild("leaderstats")
+    if ls then
+        local c = ls:FindFirstChild("Coins") or ls:FindFirstChild("Money") or ls:FindFirstChild("Cash")
+        if c then State.InitialCoins = c.Value end
+    end
+end)
+
+-- Live HUD Updating Loop
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if State.ShowHUD and HUD.Visible then
+            local elapsed = os.time() - State.StartTime
+            local hrs = math.floor(elapsed / 3600)
+            local mins = math.floor((elapsed % 3600) / 60)
+            local secs = elapsed % 60
+            hudTime.Text = string.format("⏱ Session: %02d:%02d:%02d", hrs, mins, secs)
+            
+            -- Read current coins
+            local curCoins = 0
+            local ls = LP:FindFirstChild("leaderstats")
+            if ls then
+                local c = ls:FindFirstChild("Coins") or ls:FindFirstChild("Money") or ls:FindFirstChild("Cash")
+                if c then curCoins = c.Value end
+                local reb = ls:FindFirstChild("Rebirth") or ls:FindFirstChild("Rebirths")
+                if reb then State.RebirthCount = reb.Value end
+            end
+            
+            local earned = math.max(curCoins - State.InitialCoins, 0)
+            local ratePerHr = (elapsed > 10) and math.floor((earned / elapsed) * 3600) or 0
+            
+            hudCoins.Text = string.format("💰 Earned: +$%d  (%s/hr)", earned, tostring(ratePerHr))
+            hudLogs.Text  = string.format("🪵 Chopped: %d  |  🔁 Rebirths: %d", State.ChopCount, State.RebirthCount)
+        end
+    end
+end)
 
 -- Safe Tree Chopping Loop
 task.spawn(function()
     while true do
-        task.wait(1.5) -- Safe rate, does not crash or spam
+        task.wait(1.5)
         if State.AutoChop then
             local root = getRoot()
             local char = getChar()
@@ -850,15 +1131,21 @@ task.spawn(function()
                 local myPos = root.Position
                 local bestTree, bestDist = nil, State.SafeRadius
                 
-                -- Only search nearby objects (strict distance limit prevents map-wide flying!)
                 for _, obj in ipairs(workspace:GetDescendants()) do
                     if obj:IsA("Model") and obj.Name:lower():find("tree") then
                         local part = obj:FindFirstChild("Trunk") or obj.PrimaryPart or obj:FindFirstChildOfClass("BasePart")
                         if part then
                             local d = (part.Position - myPos).Magnitude
                             if d <= bestDist then
-                                bestTree = obj
-                                bestDist = d
+                                -- Golden priority
+                                if State.GoldenPriority and (obj.Name:lower():find("gold") or obj.Name:lower():find("event")) then
+                                    bestTree = obj
+                                    bestDist = -1
+                                    break
+                                else
+                                    bestTree = obj
+                                    bestDist = d
+                                end
                             end
                         end
                     end
@@ -867,9 +1154,7 @@ task.spawn(function()
                 if bestTree then
                     local trunk = bestTree:FindFirstChild("Trunk") or bestTree.PrimaryPart or bestTree:FindFirstChildOfClass("BasePart")
                     if trunk then
-                        -- Only step to tree IF the user enabled AllowTeleport
                         if State.AllowTeleport then
-                            -- Zero out velocity before moving to prevent flinging!
                             pcall(function()
                                 root.AssemblyLinearVelocity = Vector3.zero
                                 root.AssemblyAngularVelocity = Vector3.zero
@@ -878,7 +1163,6 @@ task.spawn(function()
                             task.wait(0.15)
                         end
                         
-                        -- Fire chop remote
                         local fired = false
                         for _, v in ipairs(ReplicatedStorage:GetDescendants()) do
                             if v:IsA("RemoteEvent") and v.Name:lower():find("chop") then
@@ -887,13 +1171,9 @@ task.spawn(function()
                                 break
                             end
                         end
-                        
-                        -- Fallback: Use held axe tool
                         if not fired then
                             local tool = char:FindFirstChildOfClass("Tool")
-                            if tool then
-                                pcall(function() tool:Activate() end)
-                            end
+                            if tool then pcall(function() tool:Activate() end) end
                         end
                         
                         State.ChopCount = State.ChopCount + 1
@@ -904,33 +1184,34 @@ task.spawn(function()
     end
 end)
 
--- Safe Tycoon Upgrades & Workers Loop
+-- Tycoon Automation Loop
 task.spawn(function()
     while true do
         task.wait(2)
         local remotes = ReplicatedStorage:FindFirstChild("Remotes")
         if remotes then
-            -- Auto Hire Workers
             if State.AutoHireWorkers then
                 pcall(function() remotes.HireWorker:FireServer() end)
             end
-            
-            -- Auto Upgrades
             if State.AutoUpgrade then
                 pcall(function()
                     for _, u in ipairs({"TruckLevel","TruckSpeed","WorkerPower","WorkerCarry","WorkerSpeed","TreeLuck","TreeRegrow"}) do
                         remotes.BuyUpgrade:FireServer(u)
-                        task.wait(0.25)
+                        task.wait(0.2)
                     end
                 end)
             end
-            
-            -- Auto Rebirth
             if State.AutoRebirth then
-                pcall(function() remotes.Rebirth:FireServer() end)
+                local ls = LP:FindFirstChild("leaderstats")
+                local coins = 0
+                if ls then
+                    local c = ls:FindFirstChild("Coins") or ls:FindFirstChild("Money") or ls:FindFirstChild("Cash")
+                    if c then coins = c.Value end
+                end
+                if coins >= State.SmartRebirthGoal then
+                    pcall(function() remotes.Rebirth:FireServer() end)
+                end
             end
-            
-            -- Auto Airport
             if State.AutoAirportHangar then
                 pcall(function()
                     local ab = remotes:FindFirstChild("AirportBuy")
@@ -944,6 +1225,52 @@ task.spawn(function()
                     local sp = remotes:FindFirstChild("SendPlane")
                     if sp then sp:FireServer("MapleRidge") end
                 end)
+            end
+        end
+    end
+end)
+
+-- Infinite Jump Hook
+UserInputService.JumpRequest:Connect(function()
+    if State.InfiniteJump then
+        local hum = getHum()
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+-- Flight Physics Controller
+RunService.RenderStepped:Connect(function()
+    if State.Fly then
+        local root = getRoot()
+        local cam = workspace.CurrentCamera
+        if root and cam then
+            local bv = root:FindFirstChild("SX_FlyBV")
+            if bv then
+                local moveDir = Vector3.zero
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                    moveDir = moveDir + cam.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                    moveDir = moveDir - cam.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                    moveDir = moveDir - cam.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                    moveDir = moveDir + cam.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                    moveDir = moveDir + Vector3.new(0, 1, 0)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                    moveDir = moveDir - Vector3.new(0, 1, 0)
+                end
+                
+                if moveDir.Magnitude > 0 then
+                    bv.Velocity = moveDir.Unit * State.FlySpeed
+                else
+                    bv.Velocity = Vector3.zero
+                end
             end
         end
     end
@@ -996,4 +1323,4 @@ FloatBtn.MouseButton1Click:Connect(function()
     MainWindow.Visible = not MainWindow.Visible
 end)
 
-print("[SmitroniX Hub] Lumber Empire loaded successfully! Running in " .. GuiParent.Name)
+print("[SmitroniX Hub v2] Fully loaded with HUD, Waypoints, Flight, and Themes!")
